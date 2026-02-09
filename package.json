@@ -1,10 +1,21 @@
 {
-  "name": "Citrus",
-  "version": "1.0.0",
-  "description": "",
+  "name": "citrus",
+  "version": "0.0.1",
+  "private": true,
+  "description": " An all-in-one discord utility bot",
+  "homepage": "https://github.com/Lemonnik6484/Citrus#readme",
+  "bugs": {
+    "url": "https://github.com/Lemonnik6484/Citrus/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lemonnik6484/Citrus.git"
+  },
+  "license": "SEE LICENSE IN LICENSE.md",
+  "author": "Lemonnik",
+  "type": "commonjs",
   "main": "index.js",
   "scripts": {
     "run": "node index.js"
-  },
-  "private": true
+  }
 }
