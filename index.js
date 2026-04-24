@@ -10,6 +10,15 @@ const {
 const fs = require('fs');
 const path = require('path');
 
+const requiredDirs = [
+    path.join(__dirname, 'modules'),
+    path.join(__dirname, 'module_data'),
+];
+
+for (const dir of requiredDirs) {
+    fs.mkdirSync(dir, { recursive: true });
+}
+
 const { token, clientId } = require('./config.json');
 
 const PREFIX = "!";

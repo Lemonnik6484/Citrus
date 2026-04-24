@@ -8,13 +8,13 @@ const {
 } = require('discord.js');
 
 const Database = require('better-sqlite3');
-const path     = require('path');
+const path = require('path');
 
 const { adminRoles = [], adminUsers = [] } = (() => {
     try { return require('../config.json'); } catch { return {}; }
 })();
 
-const DB_PATH            = path.join(__dirname, 'mapw.db');
+const DB_PATH            = path.join(__dirname, '../module_data/mapw.db');
 const PAGE_SIZE          = 10;
 const WINDOW_SECONDS     = 10;
 const WINDOW_MAX_MSGS    = 2;
