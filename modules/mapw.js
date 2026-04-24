@@ -297,7 +297,7 @@ async function buildLeaderboardEmbed(guild, page) {
             } catch {
                 name = `<@${user_id}>`;
             }
-            return `${medal} **${name}** — \`${total.toFixed(1)} pts\``;
+            return `${medal} **${name}** — \`${parseInt(total)} pts\``;
         })
     );
 
@@ -409,8 +409,8 @@ const slashCommand = {
                 .setThumbnail(target.displayAvatarURL())
                 .setDescription(
                     `**${displayName}**\n` +
-                    `> Weekly total: \`${row.total.toFixed(1)} pts\`\n` +
-                    `> Today: \`${row.daily_pts.toFixed(1)} pts\``
+                    `> Weekly total: \`${parseInt(row.total)} pts\`\n` +
+                    `> Today: \`${parseInt(row.daily_ptstotal)} pts\``
                 )
                 .setColor(0x4fcf70)
                 .setTimestamp();
