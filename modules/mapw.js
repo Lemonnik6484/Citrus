@@ -9,12 +9,13 @@ const {
 
 const Database = require('better-sqlite3');
 const path = require('path');
+const fs = require("fs");
 
 const { adminRoles = [], adminUsers = [] } = (() => {
     try { return require('../config.json'); } catch { return {}; }
 })();
 
-const DB_PATH            = path.join(__dirname, '../module_data/mapw.db');
+const DB_PATH            = path.join(__dirname, '../module_data/mapw/mapw.db');
 const PAGE_SIZE          = 10;
 const WINDOW_SECONDS     = 10;
 const WINDOW_MAX_MSGS    = 2;
@@ -24,6 +25,8 @@ const VC_TICK_MINUTES    = 5;
 const VC_POINTS_PER_TICK = 1;
 const WEEK_MS            = 7 * 24 * 60 * 60 * 1000;
 const COLLECTOR_TIMEOUT  = 5 * 60 * 1000;
+
+fs.mkdirSync(path.join(__dirname, '../module_data/mapw'), { recursive: true });
 
 const db = new Database(DB_PATH);
 
