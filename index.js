@@ -1,65 +1,124 @@
 const {
     Client,
-    Events,
     GatewayIntentBits,
     Collection,
     REST,
-    Routes
+    Routes,
+    Events
 } = require('discord.js');
 
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config();
+
 const { token, clientId } = require('./config.json');
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const PREFIX = "!";
 
-client.commands = new Collection();
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
+    ]
+});
 
-const commands = [];
-const commandsPath = path.join(__dirname, 'commands');
-const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+client.slashCommands = new Collection();
+client.prefixCommands = new Collection();
 
-for (const file of commandFiles) {
-    const filePath = path.join(commandsPath, file);
-    const command = require(filePath);
+const slashPayload = [];
 
-    client.commands.set(command.data.name, command);
-    commands.push(command.data.toJSON());
-    console.log(`Loaded command ${command.data.name}`);
+const modulesPath = path.join(__dirname, 'modules');
+
+if (fs.existsSync(modulesPath)) {
+    const files = fs.readdirSync(modulesPath).filter(f => f.endsWith('.js'));
+
+    for (const file of files) {
+        const mod = require(path.join(modulesPath, file));
+
+        try {
+            if (!mod || !mod.name) {
+                console.warn(`Skipping invalid module ${file}`);
+                continue;
+            }
+
+            if (mod.slash) {
+                client.slashCommands.set(mod.slash.data.name, mod.slash);
+                slashPayload.push(mod.slash.data.toJSON());
+            }
+
+            if (mod.prefix) {
+                client.prefixCommands.set(mod.prefix.name, mod.prefix);
+            }
+
+            if (mod.events) {
+                for (const [eventName, handler] of Object.entries(mod.events)) {
+                    client.on(eventName, (...args) => handler(...args, client));
+                }
+            }
+
+            if (typeof mod.init === 'function') {
+                mod.init(client);
+            }
+
+            console.log(`Loaded module: ${mod.name}`);
+        } catch (err) {
+            console.error(`Failed loading module ${file}:`, err);
+        }
+    }
 }
 
-client.once(Events.ClientReady, async (readyClient) => {
-    console.log(`Logged in as ${readyClient.user.tag}`);
-    console.log('Registering commands...');
+client.once(Events.ClientReady, async () => {
+    console.log(`Logged in as ${client.user.tag}`);
 
     const rest = new REST({ version: '10' }).setToken(token);
 
     try {
         await rest.put(
             Routes.applicationCommands(clientId),
-            { body: commands },
+            { body: slashPayload }
         );
 
-        console.log('Commands registered globally');
-    } catch (error) {
-        console.error(error);
+        console.log("Slash commands registered");
+    } catch (err) {
+        console.error("Slash registration failed:", err);
     }
 });
 
-client.on(Events.InteractionCreate, async interaction => {
+client.on(Events.InteractionCreate, async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
-    const command = client.commands.get(interaction.commandName);
-    if (!command) return;
+    const cmd = client.slashCommands.get(interaction.commandName);
+    if (!cmd) return;
 
     try {
-        await command.execute(interaction);
-    } catch (error) {
-        console.error(error);
-        await interaction.reply({
-            content: 'Error executing command!',
-            ephemeral: true,
-        });
+        await cmd.execute(interaction, client);
+    } catch (err) {
+        console.error(err);
+
+        if (interaction.replied || interaction.deferred) {
+            await interaction.followUp({ content: "Error", ephemeral: true });
+        } else {
+            await interaction.reply({ content: "Error", ephemeral: true });
+        }
+    }
+});
+
+client.on(Events.MessageCreate, async (message) => {
+    if (message.author.bot) return;
+    if (!message.content.startsWith(PREFIX)) return;
+
+    const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
+    const name = args.shift()?.toLowerCase();
+
+    const cmd = client.prefixCommands.get(name);
+    if (!cmd) return;
+
+    try {
+        await cmd.execute(message, args, client);
+    } catch (err) {
+        console.error(err);
+        await message.reply("Error executing command");
     }
 });
 
