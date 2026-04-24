@@ -16,8 +16,8 @@ const { adminRoles = [], adminUsers = [] } = (() => {
 })();
 
 const DB_PATH            = path.join(__dirname, '../module_data/mapw/mapw.db');
-const PAGE_SIZE          = 10;
-const WINDOW_SECONDS     = 10;
+const PAGE_SIZE          = 5;
+const WINDOW_SECONDS     = 3;
 const WINDOW_MAX_MSGS    = 2;
 const DAY_TIER1          = 50;
 const DAY_TIER2          = 100;
