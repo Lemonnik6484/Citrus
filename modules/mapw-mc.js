@@ -83,7 +83,7 @@ const events = {
         const scoreMessage = getScoreMessage();
         if (!scoreMessage) return;
 
-        const pts = scoreMessage(message.guildId, userId, content);
+        const pts = scoreMessage(message.guild, message.guildId, userId, content);
         if (pts > 0) {
             console.log(`[mapw-mc] +${pts.toFixed(2)} pts → ${mcName} (${userId})`);
         }

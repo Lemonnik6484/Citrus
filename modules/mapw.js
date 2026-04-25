@@ -194,7 +194,7 @@ function rawScore(content) {
     return 1.5 * text.length * 0.01;
 }
 
-function scoreMessage(guildId, userId, content) {
+function scoreMessage(guild, guildId, userId, content) {
     const seenList = getSeen(guildId, userId);
     const h = hashMsg(content);
     if (seenList.includes(h)) return 0;
@@ -202,7 +202,6 @@ function scoreMessage(guildId, userId, content) {
     if (seenList.length > 30) seenList.shift();
 
     const raw = rawScore(content);
-    if (raw === 0) return 0;
 
     const bucket = Math.floor(Date.now() / (WINDOW_SECONDS * 1000));
     const winMap = getWindow(guildId, userId);
@@ -220,6 +219,9 @@ function scoreMessage(guildId, userId, content) {
     row.daily_pts += effective;
     row.total     += effective;
     saveRow(row);
+
+    console.log(`[mapw] +${effective.toFixed(2)} pts → ${guild.members.cache.get(userId).displayName} (${userId})`);
+
     return effective;
 }
 
@@ -229,7 +231,7 @@ const voiceSessions = {};
 function isEligible(vs) {
     if (!vs?.channel) return false;
     if (vs.selfDeaf || vs.serverDeaf || vs.selfMute || vs.serverMute) return false;
-    return vs.channel.members.filter(m => !m.user.bot && m.id !== vs.id).size > 0;
+    return vs.channel.members.filter(m => !m.user.bot && m.id !== vs.member.id).size > 0;
 }
 
 function handleVoiceStateUpdate(oldState, newState) {
@@ -458,7 +460,7 @@ const events = {
     messageCreate(message) {
         if (message.author?.bot && !botWhitelist.has(message.author.id)) return;
         if (!message.guildId) return;
-        scoreMessage(message.guildId, message.author.id, message.content);
+        scoreMessage(message.guild, message.guildId, message.author.id, message.content);
     },
     voiceStateUpdate(oldState, newState) {
         handleVoiceStateUpdate(oldState, newState);
@@ -466,6 +468,23 @@ const events = {
 };
 
 function init(client) {
+    for (const guild of client.guilds.cache.values()) {
+        for (const channel of guild.channels.cache.values()) {
+            if (channel.type !== 2) continue;
+
+            for (const member of channel.members.values()) {
+                if (member.user.bot) continue;
+
+                const vs = member.voice;
+                if (isEligible(vs)) {
+                    if (!voiceSessions[guild.id]) voiceSessions[guild.id] = {};
+                    voiceSessions[guild.id][member.id] = { lastTick: Date.now() };
+                    console.log(`[MAPW] Seeded VC session for ${member.displayName} in ${guild.name}`);
+                }
+            }
+        }
+    }
+
     setInterval(tickAllVc, 60 * 1000);
     console.log('[MAPW] SQLite DB ready. Voice ticker started.');
     console.log(`[MAPW] Bot whitelist loaded: ${botWhitelist.size} entr${botWhitelist.size === 1 ? 'y' : 'ies'}`);
