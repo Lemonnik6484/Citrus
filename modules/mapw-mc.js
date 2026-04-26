@@ -84,9 +84,6 @@ const events = {
         if (!scoreMessage) return;
 
         const pts = await scoreMessage(message.guild, message.guildId, userId, content);
-        if (pts > 0) {
-            console.log(`[mapw-mc] +${pts.toFixed(2)} pts → ${mcName} (${userId})`);
-        }
     },
 };
 
