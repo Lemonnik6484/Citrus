@@ -10,7 +10,6 @@ const {
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require("fs");
-const test = require("node:test");
 
 const { adminRoles = [], adminUsers = [] } = (() => {
     try { return require('../config.json'); } catch { return {}; }
@@ -68,6 +67,14 @@ db.exec(`
                                           guild_id    TEXT PRIMARY KEY,
                                           last_reset  INTEGER NOT NULL DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS archives (
+                                            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                                            guild_id     TEXT NOT NULL,
+                                            user_id      TEXT NOT NULL,
+                                            total        REAL NOT NULL,
+                                            week_start   INTEGER NOT NULL,
+                                            archived_at  INTEGER NOT NULL
+    );
 `);
 
 const stmts = {
@@ -95,6 +102,16 @@ const stmts = {
     `),
     reset: db.prepare(`
         DELETE FROM scores WHERE guild_id = ?
+    `),
+    archiveInsert: db.prepare(`
+        INSERT INTO archives (guild_id, user_id, total, week_start, archived_at)
+        VALUES (@guild_id, @user_id, @total, @week_start, @archived_at)
+    `),
+    allScores: db.prepare(`
+        SELECT * FROM scores WHERE guild_id = ? AND total > 0 ORDER BY total DESC
+    `),
+    allGuilds: db.prepare(`
+        SELECT DISTINCT guild_id FROM scores
     `),
     getLastReset: db.prepare(`
         SELECT last_reset FROM resets WHERE guild_id = ?
@@ -130,24 +147,70 @@ function getOrCreate(guildId, userId) {
         stmts.upsert.run(row);
     }
 
-    let dirty = false;
-
-    if (Date.now() - row.week_start >= WEEK_MS) {
-        row.total = 0;
-        row.week_start = weekStart;
-        row.daily_pts = 0;
-        row.daily_date = today;
-        dirty = true;
-    }
-
     if (row.daily_date !== today) {
         row.daily_pts = 0;
         row.daily_date = today;
-        dirty = true;
+        stmts.upsert.run(row);
     }
 
-    if (dirty) stmts.upsert.run(row);
     return row;
+}
+
+function runWeeklyReset() {
+    const now = Date.now();
+    const guilds = stmts.allGuilds.all();
+
+    if (guilds.length === 0) {
+        console.log('[MAPW] Weekly reset triggered — no guilds with scores, nothing to archive.');
+        return;
+    }
+
+    const archiveTx = db.transaction(() => {
+        let totalArchived = 0;
+        for (const { guild_id } of guilds) {
+            const rows = stmts.allScores.all(guild_id);
+            for (const row of rows) {
+                stmts.archiveInsert.run({
+                    guild_id:    row.guild_id,
+                    user_id:     row.user_id,
+                    total:       row.total,
+                    week_start:  row.week_start,
+                    archived_at: now,
+                });
+            }
+            stmts.reset.run(guild_id);
+            stmts.setLastReset.run(guild_id, now);
+            totalArchived += rows.length;
+            console.log(`[MAPW] Archived ${rows.length} score(s) for guild ${guild_id}.`);
+        }
+        console.log(`[MAPW] Weekly reset complete — ${totalArchived} total score(s) archived across ${guilds.length} guild(s).`);
+    });
+
+    archiveTx();
+}
+
+function scheduleWeeklyReset() {
+    let lastCheckedWeek = currentWeekStart();
+
+    const startupWeek = currentWeekStart();
+    const anyGuild = stmts.allGuilds.all()[0];
+    if (anyGuild) {
+        const resetRow = stmts.getLastReset.get(anyGuild.guild_id);
+        const lastReset = resetRow?.last_reset ?? 0;
+        if (lastReset < startupWeek) {
+            console.log('[MAPW] Missed weekly reset detected on startup — running now.');
+            runWeeklyReset();
+        }
+    }
+
+    setInterval(() => {
+        const week = currentWeekStart();
+        if (week !== lastCheckedWeek) {
+            lastCheckedWeek = week;
+            console.log('[MAPW] New week detected — archiving scores and resetting leaderboard.');
+            runWeeklyReset();
+        }
+    }, 60 * 60 * 1000); // check every hour
 }
 
 function saveRow(row) {
@@ -498,7 +561,8 @@ function init(client) {
     }
 
     setInterval(tickAllVc, 60 * 1000);
-    console.log('[MAPW] SQLite DB ready. Voice ticker started.');
+    scheduleWeeklyReset();
+    console.log('[MAPW] SQLite DB ready. Voice ticker started. Weekly archive scheduler started.');
     console.log(`[MAPW] Bot whitelist loaded: ${botWhitelist.size} entr${botWhitelist.size === 1 ? 'y' : 'ies'}`);
 }
 
