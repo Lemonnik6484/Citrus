@@ -1,3 +1,5 @@
+const zlib = require("zlib");
+
 module.exports = {
     name: "logUploader",
 
@@ -42,7 +44,18 @@ module.exports = {
             if (detectedLog || force) {
                 try {
                     const res = await fetch(attachment.url);
-                    content = await res.text();
+                    const buffer = Buffer.from(await res.arrayBuffer());
+
+                    if (name.toLowerCase().endsWith(".gz")) {
+                        try {
+                            content = zlib.gunzipSync(buffer).toString("utf-8");
+                        } catch (e) {
+                            console.error("Failed to unzip:", e);
+                            continue;
+                        }
+                    } else {
+                        content = buffer.toString("utf-8");
+                    }
                 } catch {
                     continue;
                 }
