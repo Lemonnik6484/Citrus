@@ -52,6 +52,21 @@ const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 function parseTime(timeStr) {
     timeStr = timeStr.trim();
 
+    const discordTimestamp = timeStr.match(/^<t:(\d+)(?::[^>]+)?>$/);
+
+    if (discordTimestamp) {
+        const timestamp = Number(discordTimestamp[1]) * 1000;
+
+        if (!Number.isSafeInteger(timestamp) || timestamp <= Date.now()) {
+            return null;
+        }
+
+        return {
+            ms: timestamp - Date.now(),
+            label: `<t:${discordTimestamp[1]}:F>`,
+        };
+    }
+
     if (/^\d+$/.test(timeStr)) {
         const timestamp = Number(timeStr);
 
@@ -68,17 +83,31 @@ function parseTime(timeStr) {
     const regex = /(?:(\d+)d)?(?:\s*(\d+)h)?(?:\s*(\d+)m)?/i;
     const match = timeStr.match(regex);
 
-    if (!match || (!match[1] && !match[2] && !match[3])) return null;
+    if (!match || (!match[1] && !match[2] && !match[3])) {
+        return null;
+    }
 
-    const days    = parseInt(match[1] || 0);
-    const hours   = parseInt(match[2] || 0);
+    const days = parseInt(match[1] || 0);
+    const hours = parseInt(match[2] || 0);
     const minutes = parseInt(match[3] || 0);
 
-    const ms = (days * 24 * 60 + hours * 60 + minutes) * 60 * 1000;
+    const ms =
+        (days * 24 * 60 +
+            hours * 60 +
+            minutes) *
+        60 *
+        1000;
 
-    return ms > 0
-        ? { ms, days, hours, minutes }
-        : null;
+    if (ms <= 0) {
+        return null;
+    }
+
+    return {
+        ms,
+        days,
+        hours,
+        minutes,
+    };
 }
 
 function formatDuration({ days, hours, minutes }) {
