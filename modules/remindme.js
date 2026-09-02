@@ -13,14 +13,14 @@ const db = new Database(path.join(__dirname, '../module_data/remindme/reminders.
 
 db.exec(`
     CREATE TABLE IF NOT EXISTS reminders (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id     TEXT    NOT NULL,
-        channel_id  TEXT,
-        guild_id    TEXT,
-        note        TEXT,
-        fire_at     INTEGER NOT NULL,   -- Unix ms timestamp
-        label       TEXT    NOT NULL,   -- human-readable duration
-        done        INTEGER NOT NULL DEFAULT 0
+                                             id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                                             user_id     TEXT    NOT NULL,
+                                             channel_id  TEXT,
+                                             guild_id    TEXT,
+                                             note        TEXT,
+                                             fire_at     INTEGER NOT NULL,   -- Unix ms timestamp
+                                             label       TEXT    NOT NULL,   -- human-readable duration
+                                             done        INTEGER NOT NULL DEFAULT 0
     )
 `);
 
@@ -37,6 +37,14 @@ const markDone = db.prepare(`
 
 const getPending = db.prepare(`
     SELECT * FROM reminders WHERE done = 0 AND fire_at <= ?
+`);
+
+const deleteReminder = db.prepare(`
+    DELETE FROM reminders WHERE id = ? AND done = 1
+`);
+
+const deleteExpiredSent = db.prepare(`
+    DELETE FROM reminders WHERE done = 1 AND fire_at <= ?
 `);
 
 const MAX_TIMEOUT_MS = 2 ** 31 - 1;
@@ -71,21 +79,30 @@ async function fireReminder(client, reminder) {
         (reminder.note ? `${reminder.note}\n` : '') +
         `*(Set ${reminder.label} ago)*`;
 
+    let delivered = false;
+
     if (reminder.channel_id) {
         try {
             const channel = await client.channels.fetch(reminder.channel_id);
             if (channel?.send) {
                 await channel.send(text);
-                return;
+                delivered = true;
             }
         } catch {}
     }
 
-    try {
-        const user = await client.users.fetch(reminder.user_id);
-        await user.send(text);
-    } catch {
-        console.error(`[remindme] Failed to deliver reminder id=${reminder.id} to user ${reminder.user_id}`);
+    if (!delivered) {
+        try {
+            const user = await client.users.fetch(reminder.user_id);
+            await user.send(text);
+            delivered = true;
+        } catch {
+            console.error(`[remindme] Failed to deliver reminder id=${reminder.id} to user ${reminder.user_id}`);
+        }
+    }
+
+    if (delivered) {
+        deleteReminder.run(reminder.id);
     }
 }
 
@@ -109,6 +126,12 @@ function startPoller(client) {
 
 function initReminders(client) {
     const now = Date.now();
+
+    const { changes: purged } = deleteExpiredSent.run(now);
+    if (purged > 0) {
+        console.log(`[remindme] Purged ${purged} expired reminder(s) already sent.`);
+    }
+
     const allPending = db.prepare('SELECT * FROM reminders WHERE done = 0').all();
     for (const reminder of allPending) {
         if (reminder.fire_at <= now) {
