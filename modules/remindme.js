@@ -181,8 +181,10 @@ module.exports = {
 
             scheduleReminder(interaction.client, reminder);
 
+            const ts = Math.floor(fireAt / 1000);
+
             await interaction.reply(
-                `Reminder set for **${label}** from now${note ? ` about: *${note}*` : ''}.`
+                `Reminder set for **${label}** from now${note ? ` about: *${note}*` : ''}. (<t:${ts}:R>)`
             );
         },
     },
