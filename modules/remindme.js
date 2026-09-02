@@ -50,8 +50,23 @@ const deleteExpiredSent = db.prepare(`
 const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 
 function parseTime(timeStr) {
+    timeStr = timeStr.trim();
+
+    if (/^\d+$/.test(timeStr)) {
+        const timestamp = Number(timeStr);
+
+        if (!Number.isSafeInteger(timestamp) || timestamp <= Date.now()) {
+            return null;
+        }
+
+        return {
+            ms: timestamp - Date.now(),
+            label: `<t:${Math.floor(timestamp / 1000)}:F>`,
+        };
+    }
+
     const regex = /(?:(\d+)d)?(?:\s*(\d+)h)?(?:\s*(\d+)m)?/i;
-    const match = timeStr.trim().match(regex);
+    const match = timeStr.match(regex);
 
     if (!match || (!match[1] && !match[2] && !match[3])) return null;
 
@@ -60,7 +75,10 @@ function parseTime(timeStr) {
     const minutes = parseInt(match[3] || 0);
 
     const ms = (days * 24 * 60 + hours * 60 + minutes) * 60 * 1000;
-    return ms > 0 ? { ms, days, hours, minutes } : null;
+
+    return ms > 0
+        ? { ms, days, hours, minutes }
+        : null;
 }
 
 function formatDuration({ days, hours, minutes }) {
@@ -187,8 +205,8 @@ module.exports = {
                 });
             }
 
-            const label  = formatDuration(parsed);
             const fireAt = Date.now() + parsed.ms;
+            const label = parsed.label ?? formatDuration(parsed);
 
             const reminder = {
                 user_id:    interaction.user.id,
